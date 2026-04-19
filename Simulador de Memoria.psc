@@ -1,11 +1,19 @@
 // =======================================
-// FUNCIONES Y SUBPROCESOS (DEFINIDOS PRIMERO)
+// MODULO: AdministradorMemoria
+// Conjunto de procedimientos y funciones para:
+// - Gestion de memoria RAM (mapa de bits)
+// - Traduccion de direcciones logicas a fisicas (MMU)
+// - Algoritmos de reemplazo de paginas (FIFO, OPT)
+// =======================================
+
+// =======================================
+// SUBPROCESOS Y FUNCIONES (FUERA DEL PROCESO PRINCIPAL)
 // =======================================
 
 // ---------- FASE 1: ESTRUCTURAS DE DATOS ----------
 SubProceso InicializarRAM(MarcoOcupado Por Referencia, MarcoPagina Por Referencia)
     Definir i Como Entero
-    Para i <- 0 Hasta 3
+    Para i <- 0 Hasta 3 Con Paso 1 Hacer
         MarcoOcupado[i] <- 0
         MarcoPagina[i] <- -1
     FinPara
@@ -14,7 +22,7 @@ FinSubProceso
 SubProceso MostrarMapaBits(MarcoOcupado, MarcoPagina)
     Definir i Como Entero
     Escribir "Mapa de bits (M0..M3):"
-    Para i <- 0 Hasta 3
+    Para i <- 0 Hasta 3 Con Paso 1 Hacer
         Si MarcoOcupado[i] = 0 Entonces
             Escribir "  M", i, ": 0 (libre)"
         Sino
@@ -23,19 +31,30 @@ SubProceso MostrarMapaBits(MarcoOcupado, MarcoPagina)
     FinPara
 FinSubProceso
 
+// ---------- FASE 2: INICIALIZACION TABLA DE PAGINAS ----------
+SubProceso InicializarTablaPaginas(Presente Por Referencia, MarcoDePagina Por Referencia)
+    Definir i Como Entero
+    Para i <- 0 Hasta 15 Con Paso 1 Hacer
+        Presente[i] <- 0
+        MarcoDePagina[i] <- -1
+    FinPara
+FinSubProceso
+
 // ---------- FASE 2: MMU Y TRADUCCION ----------
 Funcion dirFisica <- TraducirDireccion(pag, offset, Presente, MarcoDePagina, TAM_MARCO)
+    Definir marco Como Entero
     Si Presente[pag] = 0 Entonces
         dirFisica <- -1
     Sino
-        dirFisica <- (MarcoDePagina[pag] * TAM_MARCO) + offset
+        marco <- MarcoDePagina[pag]
+        dirFisica <- (marco * TAM_MARCO) + offset
     FinSi
 FinFuncion
 
 // ---------- UTILIDADES PARA FASE 3 ----------
 SubProceso InicializarMarcos(Marcos Por Referencia, Ocupado Por Referencia)
     Definir i Como Entero
-    Para i <- 0 Hasta 2
+    Para i <- 0 Hasta 2 Con Paso 1 Hacer
         Marcos[i] <- -1
         Ocupado[i] <- 0
     FinPara
@@ -44,7 +63,7 @@ FinSubProceso
 Funcion idx <- BuscarPagina(pag, Marcos, Ocupado)
     Definir i Como Entero
     idx <- -1
-    Para i <- 0 Hasta 2
+    Para i <- 0 Hasta 2 Con Paso 1 Hacer
         Si Ocupado[i] = 1 Y Marcos[i] = pag Entonces
             idx <- i
         FinSi
@@ -54,7 +73,7 @@ FinFuncion
 Funcion idx <- BuscarLibre(Ocupado)
     Definir i Como Entero
     idx <- -1
-    Para i <- 0 Hasta 2
+    Para i <- 0 Hasta 2 Con Paso 1 Hacer
         Si Ocupado[i] = 0 Entonces
             idx <- i
         FinSi
@@ -79,7 +98,7 @@ Funcion totalFallos <- SimularFIFO(Referencias, Marcos, Ocupado, MarcoOcupado, M
     Escribir "Simulacion FIFO:"
     Escribir "Paso  Pag  Estado    Marcos"
     
-    Para t <- 0 Hasta 11
+    Para t <- 0 Hasta 11 Con Paso 1 Hacer
         pag <- Referencias[t]
         idx <- BuscarPagina(pag, Marcos, Ocupado)
         
@@ -108,7 +127,7 @@ Funcion victima <- ElegirVictimaOPT(tActual, Referencias, Marcos, Ocupado)
     mayorDist <- -1
     victima <- 0
     
-    Para i <- 0 Hasta 2
+    Para i <- 0 Hasta 2 Con Paso 1 Hacer
         Si Ocupado[i] = 0 Entonces
             victima <- i
             mayorDist <- 99999
@@ -138,7 +157,7 @@ Funcion totalFallos <- SimularOPT(Referencias, Marcos, Ocupado, MarcoOcupado, Ma
     Escribir "Simulacion OPT:"
     Escribir "Paso  Pag  Estado    Marcos"
     
-    Para t <- 0 Hasta 11
+    Para t <- 0 Hasta 11 Con Paso 1 Hacer
         pag <- Referencias[t]
         idx <- BuscarPagina(pag, Marcos, Ocupado)
         
@@ -162,7 +181,7 @@ Funcion totalFallos <- SimularOPT(Referencias, Marcos, Ocupado, MarcoOcupado, Ma
 FinFuncion
 
 // =======================================
-// PROCESO PRINCIPAL INTERACTIVO
+// PROCESO PRINCIPAL
 // =======================================
 Proceso SimuladorMMU
     Definir TAM_MARCO Como Entero
@@ -205,6 +224,9 @@ Proceso SimuladorMMU
     Escribir Sin Saltar "Marco fisico asignado (0-3): "
     Leer marcoAsignado
     
+    // Inicializar tabla de paginas antes de usar
+    InicializarTablaPaginas(Presente, MarcoDePagina)
+    
     Presente[paginaLogica] <- 1
     MarcoDePagina[paginaLogica] <- marcoAsignado
     MarcoOcupado[marcoAsignado] <- 1
@@ -227,19 +249,25 @@ Proceso SimuladorMMU
     Escribir ""
     Escribir ">>> FASE 3: ALGORITMOS DE REEMPLAZO"
     Escribir "Marcos disponibles para el proceso: 3"
-    Escribir "Ingrese la secuencia de 12 referencias:"
+    Escribir "Secuencia de referencias (predefinida): [1,2,3,4,1,2,5,1,2,3,4,5]"
     Escribir ""
     
-    Para i <- 0 Hasta 11
-        Escribir Sin Saltar "Referencia [", i+1, "/12]: "
-        Leer Referencias[i]
-    FinPara
+    // Secuencia FIJA segun el PDF - NO pedir al usuario
+    Referencias[0] <- 1
+    Referencias[1] <- 2
+    Referencias[2] <- 3
+    Referencias[3] <- 4
+    Referencias[4] <- 1
+    Referencias[5] <- 2
+    Referencias[6] <- 5
+    Referencias[7] <- 1
+    Referencias[8] <- 2
+    Referencias[9] <- 3
+    Referencias[10] <- 4
+    Referencias[11] <- 5
     
-    Escribir ""
-    Escribir "Secuencia ingresada: [", Referencias[0], ", ", Referencias[1], ", ", Referencias[2], ", ", Referencias[3], ", ", Referencias[4], ", ", Referencias[5], ", ", Referencias[6], ", ", Referencias[7], ", ", Referencias[8], ", ", Referencias[9], ", ", Referencias[10], ", ", Referencias[11], "]"
-    
-    // Reiniciar marcos para simulacion FIFO
-    Para i <- 0 Hasta 3
+    // Reiniciar marcos para simulacion FIFO (solo 3 marcos)
+    Para i <- 0 Hasta 2 Con Paso 1 Hacer
         MarcoOcupado[i] <- 0
         MarcoPagina[i] <- -1
     FinPara
@@ -248,8 +276,8 @@ Proceso SimuladorMMU
     Escribir ""
     Escribir "Total fallos FIFO: ", numFallosFIFO
     
-    // Reiniciar marcos para simulacion OPT
-    Para i <- 0 Hasta 3
+    // Reiniciar marcos para simulacion OPT (solo 3 marcos)
+    Para i <- 0 Hasta 2 Con Paso 1 Hacer
         MarcoOcupado[i] <- 0
         MarcoPagina[i] <- -1
     FinPara
